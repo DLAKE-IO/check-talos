@@ -275,65 +275,186 @@ TALOS <CHECK> <STATUS> - <summary> | <perfdata>
 ### Command Definition
 
 ```cfg
-define command {
-    command_name    check_talos
-    command_line    /usr/local/bin/check-talos \
-                        -e $ARG1$ \
-                        --talos-ca /etc/nagios/talos/ca.crt \
-                        --talos-cert /etc/nagios/talos/admin.crt \
-                        --talos-key /etc/nagios/talos/admin.key \
-                        -n $HOSTADDRESS$ \
-                        $ARG2$ $ARG3$
+object CheckCommand "check_talos" {
+  command = [ "/usr/lib/nagios/plugins/check-talos", "$talos_command$" ]
+
+  arguments = {
+    "--talos-endpoint" = {
+      value = "$talos_endpoint$"
+    }
+
+    "--talosconfig" = {
+      value = "$talos_config$"
+    }
+
+    "--talos-ca" = {
+      value = "$talos_ca$"
+    }
+
+    "--talos-cert" = {
+      value = "$talos_cert$"
+    }
+
+    "--talos-key" = {
+      value = "$talos_key$"
+    }
+
+    "--talos-context" = {
+      value = "$talos_context$"
+    }
+
+    "--node" = {
+      value = "$talos_node$"
+    }
+
+    "--timeout" = {
+      value = "$talos_timeout$"
+    }
+
+    "--warning" = {
+      value = "$talos_warning$"
+    }
+
+    "--critical" = {
+      value = "$talos_critical$"
+    }
+
+    "--mount" = {
+      value = "$talos_mount$"
+    }
+
+    "--period" = {
+      value = "$talos_period$"
+    }
+
+    "--min-members" = {
+      value = "$talos_min_members$"
+    }
+
+    "--include" = {
+      value = "$talos_include$"
+    }
+
+    "--exclude" = {
+      value = "$talos_exclude$"
+    }
+  }
+  vars.talos_timeout = "10s"
 }
 ```
 
 ### Service Definitions
 
 ```cfg
-# CPU check on all Talos nodes
-define service {
-    use                     generic-service
-    hostgroup_name          talos-nodes
-    service_description     Talos CPU Usage
-    check_command           check_talos!10.0.0.100:50000!cpu!-w 80 -c 90
-    check_interval          5
-    retry_interval          1
-    max_check_attempts      3
+apply Service "talos-cpu" {
+  display_name = "CPU"
+  check_command = "check_talos"
+
+  vars.talos_command  = "cpu"
+  vars.talos_warning  = "80"
+  vars.talos_critical = "90"
+
+  vars.talos_node     = host.address
+  vars.talos_endpoint = host.address + ":50000"
+
+  vars.talos_ca = "path/to/ca"
+  vars.talos_cert = "path/to/cert"
+  vars.talos_key = "path/to/key"
+
+  assign where host.vars.os == "talos-linux"
 }
 
-# Etcd health — control plane only
-define service {
-    use                     critical-service
-    hostgroup_name          talos-controlplane
-    service_description     Talos Etcd Health
-    check_command           check_talos!10.0.0.100:50000!etcd!--min-members 3
-    check_interval          2
-    retry_interval          1
-    max_check_attempts      2
+apply Service "talos-memory" {
+  display_name = "memory"
+  check_command = "check_talos"
+
+  vars.talos_command  = "memory"
+  vars.talos_warning  = "80"
+  vars.talos_critical = "90"
+
+  vars.talos_node     = host.address
+  vars.talos_endpoint = host.address + ":50000"
+
+  vars.talos_ca = "path/to/ca"
+  vars.talos_cert = "path/to/cert"
+  vars.talos_key = "path/to/key"
+
+  assign where host.vars.os == "talos-linux"
 }
 
-# Service health — all nodes
-define service {
-    use                     generic-service
-    hostgroup_name          talos-nodes
-    service_description     Talos Services
-    check_command           check_talos!10.0.0.100:50000!services!
-    check_interval          3
-    retry_interval          1
-    max_check_attempts      2
+apply Service "talos-disk-var" {
+  display_name = "disk /var"
+  check_command = "check_talos"
+
+  vars.talos_command  = "disk"
+  vars.talos_warning  = "80"
+  vars.talos_critical = "90"
+  vars.talos_mount    = "/var"
+
+  vars.talos_node     = host.address
+  vars.talos_endpoint = host.address + ":50000"
+
+  vars.talos_ca = "path/to/ca"
+  vars.talos_cert = "path/to/cert"
+  vars.talos_key = "path/to/key"
+
+  assign where host.vars.os == "talos-linux"
 }
-```
 
-### Using talosconfig
+apply Service "talos-etcd" {
+  display_name = "etcd"
+  check_command = "check_talos"
 
-```cfg
-define command {
-    command_name    check_talos_tc
-    command_line    /usr/local/bin/check-talos \
-                        --talosconfig /etc/nagios/talos/config \
-                        --talos-context $ARG1$ \
-                        -n $HOSTADDRESS$ \
-                        $ARG2$ $ARG3$
+  vars.talos_command      = "etcd"
+  vars.talos_warning      = "~:100000000"
+  vars.talos_critical     = "~:200000000"
+  vars.talos_min_members  = 3
+
+  vars.talos_node     = host.address
+  vars.talos_endpoint = host.address + ":50000"
+
+  vars.talos_ca = "path/to/ca"
+  vars.talos_cert = "path/to/cert"
+  vars.talos_key = "path/to/key"
+
+  assign where host.vars.os == "talos-linux"
+}
+
+apply Service "talos-services" {
+  display_name = "services"
+  check_command = "check_talos"
+
+  vars.talos_command      = "services"
+
+  vars.talos_node     = host.address
+  vars.talos_endpoint = host.address + ":50000"
+
+  vars.talos_ca = "path/to/ca"
+  vars.talos_cert = "path/to/cert"
+  vars.talos_key = "path/to/key"
+
+  assign where host.vars.os == "talos-linux"
+}
+
+apply Service "talos-load" {
+  import "gtrs1-service"
+
+  display_name = "load"
+  check_command = "check_talos"
+
+  vars.talos_command      = "load"
+  vars.talos_warning      = "10"
+  vars.talos_critical     = "12"
+  vars.talos_period       = 5
+
+  vars.talos_node     = host.address
+  vars.talos_endpoint = host.address + ":50000"
+
+  vars.talos_ca = "/path/to/ca"
+  vars.talos_cert = "/path/to/cert"
+  vars.talos_key = "/path/to/key"
+
+  assign where host.vars.os == "talos-linux"
 }
 ```
 
