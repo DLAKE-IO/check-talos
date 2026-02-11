@@ -232,18 +232,8 @@ func validate(args *Args) error {
 		return fmt.Errorf("No authentication configured. Provide --talos-ca/--talos-cert/--talos-key or --talosconfig")
 	}
 
-	// V4: Certificate/key/config files must exist and be readable.
-	if hasCA && hasCert && hasKey {
-		if err := checkFileReadable("--talos-ca", args.CA); err != nil {
-			return err
-		}
-		if err := checkFileReadable("--talos-cert", args.Cert); err != nil {
-			return err
-		}
-		if err := checkFileReadable("--talos-key", args.Key); err != nil {
-			return err
-		}
-	}
+	// V4: Config file must exist and be readable.
+	// Note: CA/cert/key are not validated here because they may be base64-encoded PEM data.
 	if hasConfig {
 		if err := checkFileReadable("--talosconfig", args.Config); err != nil {
 			return err

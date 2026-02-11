@@ -7,6 +7,8 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"time"
@@ -135,19 +137,30 @@ func (c *Client) LoadAvg(ctx context.Context) (*machine.LoadAvgResponse, error) 
 	return c.inner.MachineClient.LoadAvg(c.nodeCtx(ctx), &emptypb.Empty{})
 }
 
-// buildTLSConfig creates a mutual TLS configuration from certificate file paths.
+// buildTLSConfig creates a mutual TLS configuration from certificate file paths
+// or base64-encoded PEM data.
 func buildTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
-	caCert, err := os.ReadFile(caPath)
+	caCert, err := loadPEMData(caPath, "CA certificate")
 	if err != nil {
-		return nil, fmt.Errorf("reading CA certificate: %w", err)
+		return nil, err
 	}
 
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to parse CA certificate from %s", caPath)
+		return nil, fmt.Errorf("failed to parse CA certificate")
 	}
 
-	clientCert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	certPEM, err := loadPEMData(certPath, "client certificate")
+	if err != nil {
+		return nil, err
+	}
+
+	keyPEM, err := loadPEMData(keyPath, "client key")
+	if err != nil {
+		return nil, err
+	}
+
+	clientCert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("loading client certificate/key: %w", err)
 	}
@@ -157,4 +170,38 @@ func buildTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
 		Certificates: []tls.Certificate{clientCert},
 		MinVersion:   tls.VersionTLS12,
 	}, nil
+}
+
+// loadPEMData attempts to load PEM data from either a file path or base64-encoded string.
+// It first checks if the input is a valid file path. If the file exists, it reads and
+// returns the file content. If the file does not exist, it attempts to decode the input
+// as base64 and validates that the result is valid PEM data.
+func loadPEMData(input, description string) ([]byte, error) {
+	// Try to read as file first
+	if _, err := os.Stat(input); err == nil {
+		data, err := os.ReadFile(input)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s from file: %w", description, err)
+		}
+		return data, nil
+	}
+
+	// Not a file, try base64 decoding
+	decoded, err := base64.StdEncoding.DecodeString(input)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: not a valid file path or base64-encoded data", description)
+	}
+
+	// Validate that decoded data contains at least one PEM block
+	if !containsValidPEM(decoded) {
+		return nil, fmt.Errorf("invalid %s: decoded data is not valid PEM format", description)
+	}
+
+	return decoded, nil
+}
+
+// containsValidPEM checks if the data contains at least one valid PEM block.
+func containsValidPEM(data []byte) bool {
+	block, _ := pem.Decode(data)
+	return block != nil
 }

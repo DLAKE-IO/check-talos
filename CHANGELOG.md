@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.0] - 2026-02-11
+
+### Added
+
+- **Base64-encoded PEM authentication support** — `--talos-ca`, `--talos-cert`, 
+  and `--talos-key` flags now accept either file paths (existing behavior) or 
+  inline base64-encoded PEM data, enabling credential injection via environment 
+  variables for CI/CD pipelines, container environments, and configuration 
+  management systems without requiring certificate files on disk
+- **Automatic credential format detection** — transparently detects whether 
+  authentication flags contain file paths or base64-encoded data using 
+  `os.Stat()` followed by base64 decoding fallback with PEM validation
+- **Enhanced error messages** for authentication failures, distinguishing between 
+  invalid file paths, malformed base64 encoding, and invalid PEM format to 
+  improve troubleshooting
+
+### Changed
+
+- **Authentication validation** in `cmd/check-talos/main.go` now skips file 
+  existence checks for `--talos-ca`, `--talos-cert`, and `--talos-key` flags 
+  since they may contain base64-encoded data instead of file paths (validation 
+  moved to runtime in `buildTLSConfig()`)
+- **TLS configuration** in `internal/talos/client.go` now uses `tls.X509KeyPair()` 
+  instead of `tls.LoadX509KeyPair()` to support in-memory certificate and key 
+  data from base64-decoded PEM content
+
+### Security
+
+- Base64-decoded credentials remain in memory only — no temporary files are 
+  created, reducing the attack surface and preventing credential exposure on disk
+- Credential data is handled using Go standard library cryptographic packages 
+  (`crypto/tls`, `crypto/x509`, `encoding/pem`) with no additional dependencies
+
 ## [0.1.0] - 2026-02-10
 
 Initial release of check-talos, a Nagios-compatible monitoring plugin for
@@ -54,4 +89,6 @@ Talos Linux nodes via the Talos gRPC API.
   and exit codes
 - `Makefile` with `build`, `test`, `lint`, and `clean` targets
 
+[Unreleased]: https://github.com/DLAKE-IO/check-talos/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/DLAKE-IO/check-talos/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/DLAKE-IO/check-talos/releases/tag/v0.1.0
